@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Deteksi Benda - Bahasa Indonesia</title>
+
+<style>
+  body{margin:0;background:#0a0f1a;font-family:Arial;color:#e9eef5}
+  .wrap{max-width:900px;margin:auto;padding:20px}
+  h1{margin:0 0 6px;font-size:22px}
+  p{margin:0 0 12px;font-size:14px;color:#9fb1c5}
+  button{padding:8px 14px;border:0;border-radius:6px;background:#22c55e;color:white;font-size:14px;font-weight:600;cursor:pointer}
+  button.off{background:#ef4444}
+  video{width:100%;border-radius:10px}
+  canvas{position:absolute;left:0;top:0;pointer-events:none}
+  .videoWrapper{position:relative}
+  .infoBox{margin-top:16px;padding:14px;background:#111827;border-radius:8px}
+  .objName{font-size:18px;font-weight:700;margin-bottom:4px}
+  .meta{font-size:13px;color:#9fb1c5}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <h1>Deteksi Benda Bahasa Indonesia</h1>
+  <p>Model COCO-SSD diterjemahkan agar menampilkan nama benda dalam bahasa Indonesia.</p>
+
+  <button id="btnCam">Nyalakan Kamera</button>
+
+  <div class="videoWrapper" style="margin-top:12px">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="infoBox">
+    <div class="objName" id="objName">Tidak ada deteksi</div>
+    <div class="meta" id="metaText">Arahkan objek ke kamera.</div>
+  </div>
+</div>
+
+<!-- TensorFlow -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+<script>
+let camOn = false;
+let stream = null;
+let model = null;
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const btn = document.getElementById("btnCam");
+
+const objName = document.getElementById("objName");
+const metaText = document.getElementById("metaText");
+
+const translate = {
+  "person": "orang",
+  "cell phone": "handphone",
+  "keyboard": "keyboard",
+  "mouse": "mouse",
+  "backpack": "tas",
+  "chair": "kursi",
+  "tie": "spidol (perkiraan)",
+  "remote": "penghapus papan tulis (perkiraan)",
+  "clock": "jam tangan (perkiraan)",
+  "book": "buku",
+  "bottle": "botol",
+  "cup": "gelas"
+};
+
+function customName(name){
+  if(name.includes("keyboard")) return "keyboard";
+  if(name.includes("mouse")) return "mouse";
+  if(name.includes("phone")) return "handphone";
+  if(name.includes("chair")) return "kursi";
+  if(name.includes("backpack")) return "tas";
+  return null;
+}
+
+btn.onclick = () => {
+  if(!camOn) startCam();
+  else stopCam();
+};
+
+async function startCam(){
+  btn.textContent = "Matikan Kamera";
+  btn.classList.add("off");
+  camOn = true;
+
+  stream = await navigator.mediaDevices.getUserMedia({video:true});
+  video.srcObject = stream;
+
+  video.onloadedmetadata = () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  };
+
+  if(!model){
+    objName.textContent = "Memuat model...";
+    model = await cocoSsd.load();
+    objName.textContent = "Model siap • Arahkan objek";
+  }
+
+  detectLoop();
+}
+
+function stopCam(){
+  camOn = false;
+  btn.textContent = "Nyalakan Kamera";
+  btn.classList.remove("off");
+
+  if(stream){
+    stream.getTracks().forEach(t => t.stop());
+  }
+
+  objName.textContent = "Kamera mati";
+  metaText.textContent = "Tekan tombol untuk menyalakan kamera";
+}
+
+async function detectLoop(){
+  if(!camOn) return;
+
+  const predictions = await model.detect(video);
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  let detected = null;
+
+  predictions.forEach(p=>{
+    let [x,y,w,h] = p.bbox;
+
+    ctx.strokeStyle = "#22c55e";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x,y,w,h);
+
+    ctx.fillStyle = "rgba(17,24,39,0.8)";
+    ctx.fillRect(x,y-20,140,20);
+
+    ctx.fillStyle = "white";
+    ctx.fillText(p.class + " " + Math.round(p.score*100)+"%", x+4, y-6);
+
+    detected = p;
+  });
+
+  if(detected){
+    const ori = detected.class;
+    const score = (detected.score*100).toFixed(1);
+    let mapped = translate[ori] || customName(ori) || ori;
+
+    objName.textContent = mapped;
+    metaText.textContent = "Akurasi: " + score + "%";
+  } else {
+    objName.textContent = "Tidak ada objek";
+    metaText.textContent = "Arahkan benda ke kamera.";
+  }
+
+  requestAnimationFrame(detectLoop);
+}
+</script>
+</body>
+</html>

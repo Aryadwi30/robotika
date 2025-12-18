@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deteksi Warna Kamera – Titik Tengah</title>
+
+<style>
+  :root{
+    --bg:#0c1224;
+    --panel:#141b2e;
+    --text:#eaf2ff;
+    --accent:#4da3ff;
+    --border:#223045;
+  }
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:Arial, sans-serif;
+    color:var(--text);
+    display:flex;
+    justify-content:center;
+    padding:20px;
+  }
+  .container{
+    max-width:700px;
+    width:100%;
+    background:var(--panel);
+    padding:20px;
+    border-radius:12px;
+    border:1px solid var(--border);
+  }
+  h2{
+    margin-top:0;
+    color:var(--accent);
+    text-align:center;
+  }
+  video{
+    width:100%;
+    border-radius:12px;
+    border:1px solid var(--border);
+  }
+  .center-dot{
+    position:absolute;
+    width:18px;
+    height:18px;
+    border:3px solid var(--accent);
+    border-radius:50%;
+    pointer-events:none;
+    transform:translate(-50%,-50%);
+  }
+  #videoWrapper{
+    position:relative;
+    margin-bottom:20px;
+  }
+  .btn{
+    width:100%;
+    padding:12px;
+    margin:10px 0;
+    background:var(--accent);
+    color:black;
+    border:none;
+    border-radius:8px;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+  }
+  .color-box{
+    width:60px;
+    height:60px;
+    border-radius:8px;
+    border:2px solid var(--border);
+    margin-right:15px;
+  }
+  .row{
+    display:flex;
+    align-items:center;
+    margin-top:15px;
+  }
+  .label{
+    font-size:18px;
+    font-weight:bold;
+  }
+  .value{
+    margin-left:10px;
+    font-size:18px;
+    color:var(--accent);
+  }
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h2>Deteksi Warna (Titik Tengah)</h2>
+
+  <button id="toggleBtn" class="btn">Nyalakan Kamera</button>
+
+  <div id="videoWrapper">
+    <video id="video" autoplay playsinline style="display:none"></video>
+    <div id="dot" class="center-dot" style="display:none"></div>
+  </div>
+
+  <canvas id="canvas" style="display:none"></canvas>
+
+  <div class="row">
+    <div id="colorBox" class="color-box"></div>
+    <div>
+      <div><span class="label">RGB :</span> <span id="rgbValue" class="value">-</span></div>
+      <div><span class="label">HEX :</span> <span id="hexValue" class="value">-</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let stream = null;
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const toggleBtn = document.getElementById("toggleBtn");
+const dot = document.getElementById("dot");
+
+const colorBox = document.getElementById("colorBox");
+const rgbValue = document.getElementById("rgbValue");
+const hexValue = document.getElementById("hexValue");
+
+function rgbToHex(r,g,b){
+  return "#" + [r,g,b].map(x=>{
+    const hex = x.toString(16);
+    return hex.length===1 ? "0"+hex : hex;
+  }).join("");
+}
+
+async function startCamera(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    video.style.display = "block";
+    dot.style.display = "block";
+    toggleBtn.textContent = "Matikan Kamera";
+    detectLoop();
+  }catch(err){
+    alert("Kamera gagal diakses: " + err);
+  }
+}
+
+function stopCamera(){
+  if(stream){
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+  video.style.display = "none";
+  dot.style.display = "none";
+  toggleBtn.textContent = "Nyalakan Kamera";
+}
+
+toggleBtn.addEventListener("click", ()=>{
+  if(stream){
+    stopCamera();
+  } else {
+    startCamera();
+  }
+});
+
+function detectLoop(){
+  if(!stream) return;
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+  // titik tengah
+  const x = Math.floor(canvas.width / 2);
+  const y = Math.floor(canvas.height / 2);
+
+  const pixel = ctx.getImageData(x,y,1,1).data;
+  const [r,g,b] = pixel;
+
+  colorBox.style.background = `rgb(${r},${g},${b})`;
+  rgbValue.textContent = `${r}, ${g}, ${b}`;
+  hexValue.textContent = rgbToHex(r,g,b);
+
+  // posisi dot di tengah video
+  const rect = video.getBoundingClientRect();
+  dot.style.left = (rect.width/2 + rect.left - rect.left) + "px";
+  dot.style.top = (rect.height/2 + rect.top - rect.top) + "px";
+
+  requestAnimationFrame(detectLoop);
+}
+</script>
+
+</body>
+</html>
